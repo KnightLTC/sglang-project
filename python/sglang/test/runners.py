@@ -31,7 +31,7 @@ from transformers import (
 )
 
 from sglang.srt.entrypoints.engine import Engine
-from sglang.srt.utils import load_image
+from sglang.srt.utils import is_npu, load_image
 from sglang.srt.utils.hf_transformers_utils import get_tokenizer
 from sglang.test.test_utils import DEFAULT_PORT_FOR_SRT_TEST_RUNNER, calculate_rouge_l
 
@@ -114,7 +114,8 @@ def _get_sentence_transformer_embedding_model(
             modules=[word_embedding_model, pooling_model], truncate_dim=matryoshka_dim
         )
 
-    return model.cuda()
+    device = "npu" if is_npu() else "cuda"
+    return model.to(device)
 
 
 @dataclass
