@@ -62,6 +62,7 @@ from sglang.srt.utils import (
 from sglang.srt.utils.common import get_current_device_stream_fast
 
 _is_cuda = is_cuda()
+_is_npu = is_npu()
 
 logger = logging.getLogger(__name__)
 
