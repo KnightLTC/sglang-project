@@ -35,7 +35,10 @@ from sglang.srt.layers.linear import (
     RowParallelLinear,
 )
 from sglang.srt.layers.logits_processor import LogitsProcessor
-from sglang.srt.layers.moe import MoeRunnerConfig
+from sglang.srt.layers.moe.fused_moe_triton.fused_moe import fused_moe
+from sglang.srt.layers.moe.moe_runner import MoeRunnerConfig
+from sglang.srt.layers.moe.topk import TopK
+from sglang.srt.layers.quantization.base_config import QuantizationConfig
 from sglang.srt.layers.moe.topk import TopK
 from sglang.srt.layers.quantization.base_config import (
     QuantizationConfig,
@@ -148,6 +151,7 @@ class DbrxExperts(nn.Module):
                 "weight_loader": self.weight_loader,
             },
         )
+        self.fused_moe_method = fused_moe if not _is_npu else fused_moe_npu
 
     def weight_loader(
         self, param: nn.Parameter, loaded_weight: torch.Tensor, weight_name: str
@@ -183,9 +187,7 @@ class DbrxExperts(nn.Module):
         # router_logits: (num_tokens, n_experts)
         router_logits = self.router(hidden_states)
         topk_output = self.topk(hidden_states, router_logits)
-        if _is_npu:
-            fused_moe = fused_moe_npu
-        final_hidden_states = fused_moe(
+        final_hidden_states = self.fused_moe_method(
             hidden_states,
             self.ws,
             self.w2s,
