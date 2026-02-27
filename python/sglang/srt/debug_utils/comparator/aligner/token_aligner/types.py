@@ -1,10 +1,11 @@
 from __future__ import annotations
 
-from dataclasses import dataclass
-from typing import NamedTuple, Union
+from dataclasses import dataclass, field
+from typing import NamedTuple, Optional, Union
 
 from pydantic import model_validator
 
+from sglang.srt.debug_utils.comparator.dims import TokenLayout
 from sglang.srt.debug_utils.comparator.utils import (
     Pair,
     _check_equal_lengths,
@@ -50,19 +51,22 @@ class TokenAlignerGlobalAux:
 
     step_auxs: dict[int, TokenAlignerStepAux]
     framework: str  # "sglang" | "megatron"
-    layout: str  # "thd"
+    layout: TokenLayout
+    thd_seq_lens_by_step: Optional[dict[int, list[int]]] = field(default=None)
 
 
 class TokenLocator(_FrozenBase):
-    """Locates tokens within a single-step tensor.
+    """Locates tokens within a multi-step tensor store.
 
-    token i is at tensor[token_index_in_step[i]].
+    token i is at tensor_of_step[steps[i]][token_index_in_step[i]].
     """
 
+    steps: list[int]
     token_index_in_step: list[int]
 
     def __add__(self, other: TokenLocator) -> TokenLocator:
         return TokenLocator(
+            steps=self.steps + other.steps,
             token_index_in_step=self.token_index_in_step + other.token_index_in_step,
         )
 
@@ -81,6 +85,7 @@ class TokenAlignerSeqInfo(_FrozenBase):
         _check_equal_lengths(
             input_ids=self.input_ids,
             positions=self.positions,
+            locator_steps=self.locator.steps,
             locator_token_index_in_step=self.locator.token_index_in_step,
         )
 
@@ -103,18 +108,21 @@ class TokenAlignerSeqsInfo(_FrozenBase):
     """All sequences for one side across all steps."""
 
     sequences: dict[SeqId, TokenAlignerSeqInfo]
-    layout: str
+    layout: TokenLayout
 
 
 class TokenAlignerPlan(_FrozenBase):
     """Token alignment plan. locators.x[i] and locators.y[i] correspond to the same logical token."""
 
     locators: Pair[TokenLocator]
+    layouts: Pair[TokenLayout]
 
     @model_validator(mode="after")
     def _validate_fields(self) -> TokenAlignerPlan:
         _check_equal_lengths(
+            locators_x_steps=self.locators.x.steps,
             locators_x_token_index_in_step=self.locators.x.token_index_in_step,
+            locators_y_steps=self.locators.y.steps,
             locators_y_token_index_in_step=self.locators.y.token_index_in_step,
         )
         return self
